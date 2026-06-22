@@ -1,14 +1,11 @@
--- ==========================================================
--- FIRE FARM + HITBOX EXPANDER + BOSS TIMER | Matcha (OPTIMIZED)
--- ==========================================================
+-- Fire Elements Farm + Hitbox Expander (event boss) for Matcha
+-- by useraymi
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
--- ==========================================================
--- CONFIG
--- ==========================================================
+-- Config
 local SEARCH_PATH = "Workspace.Gameplay.RegionsLoaded.SummerEvent26.CurrencyPickup.CurrencyHolder"
 local TARGET_SIZE = Vector3.new(4.04, 3.6, 1.98)
 local SIZE_TOLERANCE = 0.5
@@ -19,10 +16,8 @@ local LOOP_DELAY = 0.05
 local SHELL_CACHE_TIME = 0.5
 
 local BOSS_HOLDER_PATH = "ReplicatedStorage.HiddenRegions.SummerEvent26.Boss.BossHolder"
-
 local SUMMER_TP_PAD = Vector3.new(609.14, 208.54, 74.28)
 local BOSS_TP_PAD = Vector3.new(1030.07, 89.31, 1530.62)
-
 local BOSS_WAIT_AFTER_TP = 2.0
 local BOSS_FARM_OFFSET = 5.0 
 local BOSS_MAX_WAIT_TIME = 120
@@ -65,7 +60,7 @@ local TP_POS = {
     Buy = Vector3.new(450.32, 184.37, 50.05),
 }
 
--- STATE
+-- State
 local IS_RUNNING = false
 local FARM_MODE = "mobs"
 local currentZoneIndex = 1
@@ -87,26 +82,17 @@ local HB_ENABLED = false
 local bossDeathTime = nil
 local bossRespawnTime = 180
 
--- ==========================================================
--- UTILITIES
--- ==========================================================
-
+-- Utils
 local function safeSet(key, val)
     pcall(function() UI.SetValue(key, tostring(val)) end)
 end
 
 local function findObject(path)
     local parts = {}
-    for part in string.gmatch(path, "[^%.]+") do
-        table.insert(parts, part)
-    end
+    for part in string.gmatch(path, "[^%.]+") do table.insert(parts, part) end
     local current = game
     for i = 1, #parts do
-        if current then
-            current = current:FindFirstChild(parts[i])
-        else
-            return nil
-        end
+        if current then current = current:FindFirstChild(parts[i]) else return nil end
     end
     return current
 end
@@ -122,18 +108,12 @@ local function getPlayerPos()
     return root and root.Position or nil
 end
 
--- ==========================================================
--- MOB HP
--- ==========================================================
-
+-- Mob HP
 local function getMobHP(model)
     if not model then return nil, nil end
-
     local hum = model:FindFirstChildOfClass("Humanoid")
-    if hum then
-        return hum.Health, hum.MaxHealth
-    end
-
+    if hum then return hum.Health, hum.MaxHealth end
+    
     local attrHp = model:GetAttribute("Health")
     if attrHp and type(attrHp) == "number" then
         return attrHp, model:GetAttribute("MaxHealth") or attrHp
@@ -142,12 +122,9 @@ local function getMobHP(model)
     for _, d in ipairs(model:GetDescendants()) do
         if d:IsA("TextLabel") and d.Text then
             local hpStr, maxHpStr = d.Text:match("(%d+)%s*/%s*(%d+)")
-            if hpStr and maxHpStr then
-                return tonumber(hpStr), tonumber(maxHpStr)
-            end
+            if hpStr and maxHpStr then return tonumber(hpStr), tonumber(maxHpStr) end
         end
     end
-
     return nil, nil
 end
 
@@ -156,23 +133,14 @@ local function isMobAlive(model)
     local root = model:FindFirstChild("HumanoidRootPart")
     if not root or not root.Parent then return false end
     local hp = getMobHP(model)
-    if hp ~= nil then
-        return hp > 0
-    end
+    if hp ~= nil then return hp > 0 end
     return true
 end
 
--- ==========================================================
--- BOSS DETECTION
--- ==========================================================
-
+-- Boss Detection
 local function findSummerBoss()
     local holder = findObject(BOSS_HOLDER_PATH)
-    
-    if not holder then
-        holder = findObject("Workspace.Gameplay.RegionsLoaded.SummerEvent26.Boss.BossHolder")
-    end
-
+    if not holder then holder = findObject("Workspace.Gameplay.RegionsLoaded.SummerEvent26.Boss.BossHolder") end
     if not holder then return nil end
     
     local bossModel = holder:FindFirstChild("Boss")
@@ -180,9 +148,7 @@ local function findSummerBoss()
         local root = bossModel:FindFirstChild("HumanoidRootPart")
         if root then
             local hp = getMobHP(bossModel)
-            if hp == nil or hp > 0 then
-                return bossModel
-            end
+            if hp == nil or hp > 0 then return bossModel end
         end
     end
     
@@ -191,18 +157,14 @@ local function findSummerBoss()
             local root = obj:FindFirstChild("HumanoidRootPart")
             if root then
                 local hp = getMobHP(obj)
-                if hp == nil or hp > 0 then
-                    return obj
-                end
+                if hp == nil or hp > 0 then return obj end
             end
         end
     end
     return nil
 end
 
-local function isBossAlive()
-    return findSummerBoss() ~= nil
-end
+local function isBossAlive() return findSummerBoss() ~= nil end
 
 local function safeTeleport(pos, offset, forceAllow)
     if not forceAllow and isBossAlive() then
@@ -235,10 +197,7 @@ local function waitForCharacter(timeout)
     return false
 end
 
--- ==========================================================
--- BOSS TIMER
--- ==========================================================
-
+-- Boss Timer
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -265,10 +224,7 @@ task.spawn(function()
     end
 end)
 
--- ==========================================================
--- HITBOX EXPANDER
--- ==========================================================
-
+-- Hitbox Expander
 local TORSO_NAMES = {"Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart", "Chest", "Body"}
 local ARM_NAMES = {"Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "Arm"}
 local LEG_NAMES = {"Left Leg", "Right Leg", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "Leg"}
@@ -306,10 +262,7 @@ end
 
 local function saveOriginal(part)
     if not originalSizes[part] then
-        originalSizes[part] = {
-            size = part.Size,
-            transparency = part.Transparency,
-        }
+        originalSizes[part] = {size = part.Size, transparency = part.Transparency}
     end
 end
 
@@ -360,9 +313,7 @@ end
 
 local function expandMob(mob, mult, target)
     if not mob then return end
-    for _, part in ipairs(getTargetParts(mob, target)) do
-        expandPart(part, mult)
-    end
+    for _, part in ipairs(getTargetParts(mob, target)) do expandPart(part, mult) end
 end
 
 local function restoreAllHitboxes()
@@ -402,10 +353,7 @@ local function refreshHitboxes()
     PART_TRANSPARENCY = transp
 
     local currentBossMob = nil
-    for mob, _ in pairs(expandedMobs) do
-        currentBossMob = mob
-        break
-    end
+    for mob, _ in pairs(expandedMobs) do currentBossMob = mob; break end
 
     if currentBossMob ~= boss then
         restoreAllHitboxes()
@@ -442,10 +390,7 @@ task.spawn(function()
     end
 end)
 
--- ==========================================================
--- FARM LOGIC
--- ==========================================================
-
+-- Farm Logic
 local function extractMobData(model, zoneName)
     if not model or not model:IsA("Model") then return nil end
     local root = model:FindFirstChild("HumanoidRootPart")
@@ -456,22 +401,9 @@ local function extractMobData(model, zoneName)
     local dist = pPos and (root.Position - pPos).Magnitude or 0
     local priority = 99
     for i = 1, #MOB_PRIORITY do
-        if model.Name:find(MOB_PRIORITY[i]) then
-            priority = i
-            break
-        end
+        if model.Name:find(MOB_PRIORITY[i]) then priority = i; break end
     end
-    return {
-        model = model,
-        root = root,
-        pos = root.Position,
-        dist = dist,
-        hp = hp or 0,
-        maxHp = 0,
-        name = model.Name,
-        zone = zoneName or "?",
-        priority = priority,
-    }
+    return {model = model, root = root, pos = root.Position, dist = dist, hp = hp or 0, maxHp = 0, name = model.Name, zone = zoneName or "?", priority = priority}
 end
 
 local function findMobsInZone(zone)
@@ -482,10 +414,7 @@ local function findMobsInZone(zone)
         local obj = findObject(zone.directPaths[d])
         if obj and not seen[obj] then
             local data = extractMobData(obj, zone.name)
-            if data then
-                seen[obj] = true
-                table.insert(results, data)
-            end
+            if data then seen[obj] = true; table.insert(results, data) end
         end
     end
 
@@ -497,10 +426,7 @@ local function findMobsInZone(zone)
                     for p = 1, #MOB_PRIORITY do
                         if obj.Name:find(MOB_PRIORITY[p]) then
                             local data = extractMobData(obj, zone.name)
-                            if data then
-                                seen[obj] = true
-                                table.insert(results, data)
-                            end
+                            if data then seen[obj] = true; table.insert(results, data) end
                             break
                         end
                     end
@@ -513,7 +439,6 @@ local function findMobsInZone(zone)
         if a.priority ~= b.priority then return a.priority < b.priority end
         return a.dist < b.dist
     end)
-
     return results
 end
 
@@ -522,13 +447,11 @@ local function farmSingleMob(mobData, offset, maxWait)
     local mobName = mobData.name
     local mobZone = mobData.zone
     local startTime = tick()
-    local lastHp = mobData.hp
     local lastFollowTp = 0
     local tpOffset = offset or MOB_TELEPORT_OFFSET
     local waitTime = maxWait or MOB_MAX_WAIT_TIME
 
     if not getPlayerRoot() then waitForCharacter() end
-
     safeSet("status", "Killing: " .. mobName .. " [" .. mobZone .. "]")
     safeTeleport(mobData.pos, tpOffset, true)
     task.wait(0.5)
@@ -538,7 +461,6 @@ local function farmSingleMob(mobData, offset, maxWait)
             safeSet("status", "⚠️ Boss Spawned! Interrupting...")
             break
         end
-
         if tick() - startTime > waitTime then
             safeSet("mobStatus", mobName .. " | TIMEOUT")
             break
@@ -565,12 +487,10 @@ local function farmSingleMob(mobData, offset, maxWait)
 
         local currentHp = getMobHP(mob)
         if currentHp then
-            lastHp = currentHp
             safeSet("mobStatus", string.format("%s | HP:%d | %s", mobName, currentHp, mobZone))
         else
             safeSet("mobStatus", mobName .. " | alive | " .. mobZone)
         end
-
         task.wait(MOB_HP_CHECK_INTERVAL)
     end
 
@@ -583,10 +503,8 @@ end
 
 local function farmSummerBoss()
     safeSet("status", "Checking Summer Boss...")
-
     local boss = findSummerBoss()
     if not boss then return false end
-
     if not getPlayerRoot() then waitForCharacter() end
 
     safeSet("status", "🔒 BOSS PRIORITY | TP to Event...")
@@ -617,17 +535,13 @@ local function farmSummerBoss()
         local startTime = tick()
         while IS_RUNNING and isMobAlive(boss) do
             if tick() - startTime > BOSS_MAX_WAIT_TIME then break end
-            
             local currentHp = getMobHP(boss)
-            if currentHp then
-                safeSet("mobStatus", string.format("BOSS HP: %d", currentHp))
-            end
+            if currentHp then safeSet("mobStatus", string.format("BOSS HP: %d", currentHp)) end
             
             local myPos = getPlayerPos()
             if myPos and (bossRoot.Position - myPos).Magnitude > 15 then
                 safeTeleport(bossRoot.Position, BOSS_FARM_OFFSET, true)
             end
-            
             task.wait(0.2)
         end
         
@@ -638,14 +552,10 @@ local function farmSummerBoss()
             return true
         end
     end
-
     return false
 end
 
--- ==========================================================
--- AUTO BOSS CHECKER
--- ==========================================================
-
+-- Auto Boss Checker
 task.spawn(function()
     while true do
         task.wait(30)
@@ -656,10 +566,7 @@ task.spawn(function()
     end
 end)
 
--- ==========================================================
--- MAIN LOOPS
--- ==========================================================
-
+-- Main Loops
 local function transitionToNextZone(fromZone)
     local nextIdx = currentZoneIndex + 1
     if nextIdx > #MOB_ZONES then nextIdx = 1 end
@@ -672,7 +579,6 @@ local function transitionToNextZone(fromZone)
         safeTeleport(fromZone.exitPad, 3, true)
         task.wait(2.0)
     end
-
     if not getPlayerRoot() then waitForCharacter() end
     safeTeleport(nextZone.farmPos, 3, true)
     task.wait(ZONE_SWITCH_DELAY)
@@ -702,7 +608,6 @@ local function mobFarmingLoop()
             else
                 safeSet("status", "No mobs in " .. zone.name)
                 safeSet("mobStatus", "Checking next zone...")
-                
                 if isBossAlive() then
                     farmSummerBoss()
                 else
@@ -710,7 +615,6 @@ local function mobFarmingLoop()
                 end
             end
         end
-
         task.wait(0.1)
     end
 end
@@ -725,23 +629,16 @@ end
 
 local function findAllSeashells()
     local now = os.clock()
-    if shellCache and (now - shellCacheTime) < SHELL_CACHE_TIME then
-        return shellCache
-    end
+    if shellCache and (now - shellCacheTime) < SHELL_CACHE_TIME then return shellCache end
     local results = {}
     local container = findObject(SEARCH_PATH)
-    if not container then
-        shellCache = results
-        shellCacheTime = now
-        return results
-    end
+    if not container then shellCache = results; shellCacheTime = now; return results end
+    
     for _, obj in ipairs(container:GetDescendants()) do
         if obj:IsA("BasePart") and obj.Name:find("Seashell") and checkSize(obj) then
             local pos = obj.Position
             local parent = obj.Parent
-            if parent and parent:IsA("Model") and parent.PrimaryPart then
-                pos = parent.PrimaryPart.Position
-            end
+            if parent and parent:IsA("Model") and parent.PrimaryPart then pos = parent.PrimaryPart.Position end
             table.insert(results, { pos = pos, obj = obj })
         end
     end
@@ -750,9 +647,7 @@ local function findAllSeashells()
     return results
 end
 
-local function isValidShell(data)
-    return data and data.obj and data.obj.Parent ~= nil
-end
+local function isValidShell(data) return data and data.obj and data.obj.Parent ~= nil end
 
 local function farmSeashellsOnce()
     local shells = findAllSeashells()
@@ -760,16 +655,13 @@ local function farmSeashellsOnce()
 
     local pPos = getPlayerPos()
     if pPos then
-        for i = 1, #shells do
-            shells[i].dist = (shells[i].pos - pPos).Magnitude
-        end
+        for i = 1, #shells do shells[i].dist = (shells[i].pos - pPos).Magnitude end
         table.sort(shells, function(a, b) return a.dist < b.dist end)
     end
 
     local collected = 0
     for i = 1, #shells do
         if not IS_RUNNING then return collected end
-
         local data = shells[i]
         if isValidShell(data) then
             local currentPos = getPlayerPos()
@@ -805,7 +697,6 @@ local function farmSeashellsOnce()
             end
         end
     end
-
     if collected > 0 then shellCache = nil end
     return collected
 end
@@ -848,60 +739,40 @@ function stopFarming()
     safeSet("mobStatus", "-")
 end
 
--- ==========================================================
 -- UI
--- ==========================================================
-
 UI.AddTab("Fire Farm", function(tab)
     local main = tab:Section("Control", "Left")
-
     main:Text("=== STATUS ===")
     main:InputText("status", "", "Waiting")
     main:InputText("mobStatus", "", "-")
     main:Text("")
-
     main:Text("=== SUMMER BOSS ===")
     main:InputText("bossInfo", "Boss:", "Loading...")
     main:Text("")
-
     main:Text("=== COUNTERS ===")
     main:InputText("mobKills", "Kills:", "0")
     main:InputText("shellCount", "Shells:", "0")
     main:Text("")
-
     main:Text("=== ZONE ===")
     main:InputText("zoneDisplay", "Zone:", MOB_ZONES[1].name)
     main:Text("")
-
     main:Text("=== CONTROL ===")
-    main:Button("Start / Stop", function()
-        if IS_RUNNING then stopFarming() else startFarming() end
-    end)
+    main:Button("Start / Stop", function() if IS_RUNNING then stopFarming() else startFarming() end end)
     main:Text("")
-
     main:Text("=== MODE ===")
-    main:Button("Mobs + Boss (Cycle)", function()
-        FARM_MODE = "mobs"
-        safeSet("status", "Mode: Mobs + Boss")
-    end)
-    main:Button("Shells Only", function()
-        FARM_MODE = "seashells"
-        safeSet("status", "Mode: Shells")
-    end)
+    main:Button("Mobs + Boss (Cycle)", function() FARM_MODE = "mobs"; safeSet("status", "Mode: Mobs + Boss") end)
+    main:Button("Shells Only", function() FARM_MODE = "seashells"; safeSet("status", "Mode: Shells") end)
 
     local tpSection = tab:Section("Teleports (Blocked if Boss Alive)", "Right")
-
     tpSection:Text("=== SHOP ===")
     tpSection:Button("Sell", function() safeTeleport(TP_POS.Sell, 2.5) end)
     tpSection:Button("Buy", function() safeTeleport(TP_POS.Buy, 2.5) end)
     tpSection:Text("")
-
     tpSection:Text("=== FIRE ZONES ===")
     tpSection:Button("ElementZones", function() safeTeleport(MOB_ZONES[1].farmPos, 3) end)
     tpSection:Button("TP Pad (Elem->Adv)", function() safeTeleport(MOB_ZONES[1].exitPad, 3) end)
     tpSection:Button("AdvancedFire", function() safeTeleport(MOB_ZONES[2].farmPos, 3) end)
     tpSection:Text("")
-
     tpSection:Text("=== SUMMER EVENT ===")
     tpSection:Button("Summer Event Pin", function() safeTeleport(SUMMER_TP_PAD, 3) end)
     tpSection:Button("Summer Boss Pad", function() safeTeleport(BOSS_TP_PAD, 3) end)
@@ -910,16 +781,13 @@ end)
 UI.AddTab("Hitbox Expander", function(tab)
     if not tab then return end
     local main = tab:Section("Control", "Left")
-
     main:Text("=== HITBOX EXPANDER ===")
     main:Text("Target: SummerEvent26 Boss")
     main:Text("")
-
     main:Text("=== STATUS ===")
     main:InputText("hbStatus", "", "OFF")
     main:InputText("hbCount", "Parts:", "0")
     main:Text("")
-
     main:Button("Toggle ON / OFF", function()
         HB_ENABLED = not HB_ENABLED
         if HB_ENABLED then
@@ -932,7 +800,6 @@ UI.AddTab("Hitbox Expander", function(tab)
         end
     end)
     main:Text("")
-
     main:Text("=== SIZE ===")
     main:InputText("hbMult", "Multiplier:", tostring(HITBOX_MULT))
     main:Button("Apply Size", function()
@@ -940,46 +807,18 @@ UI.AddTab("Hitbox Expander", function(tab)
         if val and val > 0 then
             HITBOX_MULT = val
             restoreAllHitboxes()
-            if HB_ENABLED then
-                task.wait(0.1)
-                refreshHitboxes()
-            end
+            if HB_ENABLED then task.wait(0.1); refreshHitboxes() end
             safeSet("hbStatus", "ON | x" .. val)
         end
     end)
     main:Text("")
-
     main:Text("=== TARGET PART ===")
-    main:Button("Target: Torso", function()
-        TARGET_PART = "Torso"
-        safeSet("hbTarget", "Torso")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
-    main:Button("Target: HumanoidRootPart", function()
-        TARGET_PART = "HumanoidRootPart"
-        safeSet("hbTarget", "HumanoidRootPart")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
-    main:Button("Target: All", function()
-        TARGET_PART = "All"
-        safeSet("hbTarget", "All")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
-    main:Button("Target: Head", function()
-        TARGET_PART = "Head"
-        safeSet("hbTarget", "Head")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
-    main:Button("Target: Arms", function()
-        TARGET_PART = "Arms"
-        safeSet("hbTarget", "Arms")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
-    main:Button("Target: Legs", function()
-        TARGET_PART = "Legs"
-        safeSet("hbTarget", "Legs")
-        if HB_ENABLED then restoreAllHitboxes() task.wait(0.1) refreshHitboxes() end
-    end)
+    main:Button("Target: Torso", function() TARGET_PART = "Torso"; safeSet("hbTarget", "Torso"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
+    main:Button("Target: HumanoidRootPart", function() TARGET_PART = "HumanoidRootPart"; safeSet("hbTarget", "HumanoidRootPart"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
+    main:Button("Target: All", function() TARGET_PART = "All"; safeSet("hbTarget", "All"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
+    main:Button("Target: Head", function() TARGET_PART = "Head"; safeSet("hbTarget", "Head"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
+    main:Button("Target: Arms", function() TARGET_PART = "Arms"; safeSet("hbTarget", "Arms"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
+    main:Button("Target: Legs", function() TARGET_PART = "Legs"; safeSet("hbTarget", "Legs"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
 end)
 
 safeSet("status", "Waiting")
@@ -988,7 +827,6 @@ safeSet("mobKills", "0")
 safeSet("shellCount", "0")
 safeSet("zoneDisplay", MOB_ZONES[1].name)
 safeSet("bossInfo", "Loading...")
-
 safeSet("hbStatus", "OFF")
 safeSet("hbCount", "0")
 safeSet("hbMult", tostring(HITBOX_MULT))
