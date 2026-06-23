@@ -22,6 +22,9 @@ local BOSS_WAIT_AFTER_TP = 2.0
 local BOSS_FARM_OFFSET = 5.0 
 local BOSS_MAX_WAIT_TIME = 120
 
+-- НАСТРОЙКИ ХИТБОКСОВ (Скрыты, меняй только тут)
+local HB_MULT = 15.0 
+
 local MOB_ZONES = {
     {
         name = "ElementZones",
@@ -44,7 +47,7 @@ local MOB_ZONES = {
             "Workspace.Gameplay.RegionsLoaded.AdvancedFireArea.Important.Fire.Fire Boss",
         },
         farmPos = Vector3.new(-110.74, 35.95, 681.57),
-        exitPad = Vector3.new(-117.51, 40.17, 762.62), -- Пад в Мастер Зону
+        exitPad = Vector3.new(-117.51, 40.17, 762.62),
     },
     {
         name = "MasterFireArea",
@@ -55,8 +58,8 @@ local MOB_ZONES = {
             "Workspace.Gameplay.RegionsLoaded.MasterFireArea.Important.Fire.Fire Golem",
             "Workspace.Gameplay.RegionsLoaded.MasterFireArea.Important.Fire.Master Fire Boss",
         },
-        farmPos = Vector3.new(-757.39, 90.88, 708.44), -- Центр мастер зоны
-        exitPad = nil, -- Выхода нет
+        farmPos = Vector3.new(-757.39, 90.88, 708.44),
+        exitPad = nil,
     },
 }
 
@@ -81,15 +84,17 @@ local seashellsCollected = 0
 local shellCache = nil
 local shellCacheTime = 0
 
-local HITBOX_MULT = 15.0
-local TARGET_PART = "Torso"
-local PART_TRANSPARENCY = 0.7
-local SHOW_HIGHLIGHT = true
-local originalSizes = {}
-local expandedParts = {}
-local expandedMobs = {}
-local highlights = {}
-local HB_ENABLED = true
+-- [1] SUMMER BOSS H.E. STATE
+local summerOrigSizes = {}
+local summerExpParts = {}
+local summerExpMobs = {}
+local summerHighlights = {}
+
+-- [2] NORMAL BOSS H.E. STATE
+local normOrigSizes = {}
+local normExpParts = {}
+local normExpMobs = {}
+local normHighlights = {}
 
 local bossDeathTime = nil
 local bossRespawnTime = 180
@@ -125,12 +130,10 @@ local function getMobHP(model)
     if not model then return nil, nil end
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum then return hum.Health, hum.MaxHealth end
-    
     local attrHp = model:GetAttribute("Health")
     if attrHp and type(attrHp) == "number" then
         return attrHp, model:GetAttribute("MaxHealth") or attrHp
     end
-
     for _, d in ipairs(model:GetDescendants()) do
         if d:IsA("TextLabel") and d.Text then
             local hpStr, maxHpStr = d.Text:match("(%d+)%s*/%s*(%d+)")
@@ -154,7 +157,6 @@ local function findSummerBoss()
     local holder = findObject(BOSS_HOLDER_PATH)
     if not holder then holder = findObject("Workspace.Gameplay.RegionsLoaded.SummerEvent26.Boss.BossHolder") end
     if not holder then return nil end
-    
     local bossModel = holder:FindFirstChild("Boss")
     if bossModel and bossModel:IsA("Model") then
         local root = bossModel:FindFirstChild("HumanoidRootPart")
@@ -163,7 +165,6 @@ local function findSummerBoss()
             if hp == nil or hp > 0 then return bossModel end
         end
     end
-    
     for _, obj in ipairs(holder:GetChildren()) do
         if obj:IsA("Model") then
             local root = obj:FindFirstChild("HumanoidRootPart")
@@ -171,6 +172,20 @@ local function findSummerBoss()
                 local hp = getMobHP(obj)
                 if hp == nil or hp > 0 then return obj end
             end
+        end
+    end
+    return nil
+end
+
+local function findNormalBoss()
+    local holder = findObject("Workspace.Gameplay.Boss.BossHolder")
+    if not holder then return nil end
+    local bossModel = holder:FindFirstChild("Boss")
+    if bossModel and bossModel:IsA("Model") then
+        local root = bossModel:FindFirstChild("HumanoidRootPart")
+        if root then
+            local hp = getMobHP(bossModel)
+            if hp == nil or hp > 0 then return bossModel end
         end
     end
     return nil
@@ -184,7 +199,6 @@ local function safeTeleport(pos, offset, forceAllow)
         safeSet("mobStatus", "Boss is alive! Kill him first.")
         return false
     end
-
     offset = offset or 0
     local root = getPlayerRoot()
     if not root then return false end
@@ -236,168 +250,130 @@ task.spawn(function()
     end
 end)
 
--- Hitbox Expander
-local TORSO_NAMES = {"Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart", "Chest", "Body"}
-local ARM_NAMES = {"Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "Arm"}
-local LEG_NAMES = {"Left Leg", "Right Leg", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "Leg"}
-
-local function getTargetParts(model, target)
-    local parts = {}
-    if target == "All" then
-        for _, part in ipairs(model:GetDescendants()) do
-            if part:IsA("BasePart") then table.insert(parts, part) end
-        end
-    elseif target == "Head" then
-        local head = model:FindFirstChild("Head")
-        if head then table.insert(parts, head) end
-    elseif target == "Torso" then
-        for _, name in ipairs(TORSO_NAMES) do
-            local part = model:FindFirstChild(name)
-            if part then table.insert(parts, part) end
-        end
-    elseif target == "HumanoidRootPart" then
-        local hrp = model:FindFirstChild("HumanoidRootPart")
-        if hrp then table.insert(parts, hrp) end
-    elseif target == "Arms" then
-        for _, name in ipairs(ARM_NAMES) do
-            local part = model:FindFirstChild(name)
-            if part then table.insert(parts, part) end
-        end
-    elseif target == "Legs" then
-        for _, name in ipairs(LEG_NAMES) do
-            local part = model:FindFirstChild(name)
-            if part then table.insert(parts, part) end
-        end
-    end
-    return parts
-end
-
-local function saveOriginal(part)
-    if not originalSizes[part] then
-        originalSizes[part] = {size = part.Size, transparency = part.Transparency}
+-- ======================================================
+-- БАЗОВАЯ ЛОГИКА ХИТБОКСОВ (Строго HRP)
+-- ======================================================
+local function saveOriginal(part, tbl)
+    if not tbl[part] then
+        tbl[part] = {size = part.Size, transparency = part.Transparency}
     end
 end
 
-local function restorePart(part)
-    local orig = originalSizes[part]
+local function restorePart(part, tbl)
+    local orig = tbl[part]
     if orig then
         pcall(function()
             part.Size = orig.size
             part.Transparency = orig.transparency
         end)
-        originalSizes[part] = nil
+        tbl[part] = nil
     end
 end
 
-local function addHighlight(part)
-    if not SHOW_HIGHLIGHT or highlights[part] then return end
+local function addHighlight(part, tbl, color)
+    if tbl[part] then return end
     pcall(function()
         local hl = Instance.new("Highlight")
         hl.Name = "HBHighlight"
-        hl.FillColor = Color3.fromRGB(255, 50, 50)
+        hl.FillColor = color
         hl.FillTransparency = 0.5
         hl.OutlineColor = Color3.fromRGB(255, 255, 255)
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Parent = part
-        highlights[part] = hl
+        tbl[part] = hl
     end)
 end
 
-local function removeHighlight(part)
-    if highlights[part] then
-        pcall(function() highlights[part]:Destroy() end)
-        highlights[part] = nil
+local function removeHighlight(part, tbl)
+    if tbl[part] then
+        pcall(function() tbl[part]:Destroy() end)
+        tbl[part] = nil
     end
 end
 
-local function expandPart(part, mult)
-    if not part or not part:IsA("BasePart") or expandedParts[part] then return end
-    saveOriginal(part)
+local function expandHRP(part, mult, origTbl, expTbl, hlTbl, color)
+    if not part or not part:IsA("BasePart") or expTbl[part] then return end
+    saveOriginal(part, origTbl)
     pcall(function()
-        local orig = originalSizes[part]
+        local orig = origTbl[part]
         part.Size = Vector3.new(orig.size.X * mult, orig.size.Y * mult, orig.size.Z * mult)
-        part.Transparency = PART_TRANSPARENCY
+        part.Transparency = 1 -- HRP всегда невидим
     end)
-    addHighlight(part)
-    expandedParts[part] = true
+    if color then
+        addHighlight(part, hlTbl, color)
+    end
+    expTbl[part] = true
 end
 
-local function expandMob(mob, mult, target)
-    if not mob then return end
-    for _, part in ipairs(getTargetParts(mob, target)) do expandPart(part, mult) end
+local function restoreAllHitboxes(origTbl, expTbl, hlTbl)
+    for part, _ in pairs(expTbl) do
+        restorePart(part, origTbl)
+        removeHighlight(part, hlTbl)
+    end
+    table.clear(expTbl)
+    table.clear(origTbl)
+    table.clear(hlTbl)
 end
 
-local function restoreAllHitboxes()
-    for part, _ in pairs(expandedParts) do
-        restorePart(part)
-        removeHighlight(part)
-    end
-    expandedParts = {}
-    originalSizes = {}
-    expandedMobs = {}
-    highlights = {}
-end
-
-local function refreshHitboxes()
-    if not HB_ENABLED then return end
-
-    for mob, _ in pairs(expandedMobs) do
-        if not mob.Parent then expandedMobs[mob] = nil end
-    end
-    for part, _ in pairs(expandedParts) do
-        if not part.Parent then
-            restorePart(part)
-            removeHighlight(part)
-            expandedParts[part] = nil
-        end
-    end
-
-    local boss = findSummerBoss()
-    if not boss or not boss:IsA("Model") then
-        safeSet("hbStatus", "Boss not found")
-        return
-    end
-
-    local mult = tonumber(UI.GetValue("hbMult")) or HITBOX_MULT
-    local target = UI.GetValue("hbTarget") or TARGET_PART
-    local transp = tonumber(UI.GetValue("hbTransp")) or PART_TRANSPARENCY
-    PART_TRANSPARENCY = transp
-
-    local currentBossMob = nil
-    for mob, _ in pairs(expandedMobs) do currentBossMob = mob; break end
-
-    if currentBossMob ~= boss then
-        restoreAllHitboxes()
-        expandMob(boss, mult, target)
-        expandedMobs[boss] = true
-        safeSet("hbStatus", "Expanded | " .. target .. " x" .. mult)
-    else
-        for part, _ in pairs(expandedParts) do
-            pcall(function() part.Transparency = transp end)
-        end
-    end
-end
-
+-- Фоновый цикл Летнего босса
 task.spawn(function()
     while true do
-        if HB_ENABLED then
-            local ok, err = pcall(refreshHitboxes)
-            if not ok then safeSet("hbStatus", "Error: " .. tostring(err)) end
-            task.wait(0.5)
-        else
-            task.wait(2.0)
+        task.wait(0.5)
+        for mob, _ in pairs(summerExpMobs) do
+            if not mob.Parent then summerExpMobs[mob] = nil end
+        end
+        for part, _ in pairs(summerExpParts) do
+            if not part.Parent then
+                restorePart(part, summerOrigSizes)
+                removeHighlight(part, summerHighlights)
+                summerExpParts[part] = nil
+            end
+        end
+
+        local boss = findSummerBoss()
+        if boss then
+            local currentBossMob = nil
+            for mob, _ in pairs(summerExpMobs) do currentBossMob = mob; break end
+            if currentBossMob ~= boss then
+                restoreAllHitboxes(summerOrigSizes, summerExpParts, summerHighlights)
+                local hrp = boss:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    expandHRP(hrp, HB_MULT, summerOrigSizes, summerExpParts, summerHighlights, Color3.fromRGB(255, 50, 50))
+                    summerExpMobs[boss] = true
+                end
+            end
         end
     end
 end)
 
+-- Фоновый цикл Обычного босса
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if HB_ENABLED then
-            local count = 0
-            for _ in pairs(expandedParts) do count = count + 1 end
-            safeSet("hbCount", tostring(count))
+        for mob, _ in pairs(normExpMobs) do
+            if not mob.Parent then normExpMobs[mob] = nil end
+        end
+        for part, _ in pairs(normExpParts) do
+            if not part.Parent then
+                restorePart(part, normOrigSizes)
+                removeHighlight(part, normHighlights)
+                normExpParts[part] = nil
+            end
+        end
+
+        local boss = findNormalBoss()
+        if boss then
+            local currentBossMob = nil
+            for mob, _ in pairs(normExpMobs) do currentBossMob = mob; break end
+            if currentBossMob ~= boss then
+                restoreAllHitboxes(normOrigSizes, normExpParts, normHighlights)
+                local hrp = boss:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    expandHRP(hrp, HB_MULT, normOrigSizes, normExpParts, normHighlights, nil)
+                    normExpMobs[boss] = true
+                end
+            end
         end
     end
 end)
@@ -421,7 +397,6 @@ end
 local function findMobsInZone(zone)
     local results = {}
     local seen = {}
-
     for d = 1, #zone.directPaths do
         local obj = findObject(zone.directPaths[d])
         if obj and not seen[obj] then
@@ -429,7 +404,6 @@ local function findMobsInZone(zone)
             if data then seen[obj] = true; table.insert(results, data) end
         end
     end
-
     for s = 1, #zone.searchPaths do
         local container = findObject(zone.searchPaths[s])
         if container then
@@ -446,7 +420,6 @@ local function findMobsInZone(zone)
             end
         end
     end
-
     table.sort(results, function(a, b)
         if a.priority ~= b.priority then return a.priority < b.priority end
         return a.dist < b.dist
@@ -477,7 +450,6 @@ local function farmSingleMob(mobData, offset, maxWait)
             safeSet("mobStatus", mobName .. " | TIMEOUT")
             break
         end
-
         if mobData.root and mobData.root.Parent then
             local mobPos = mobData.root.Position
             mobData.pos = mobPos
@@ -496,7 +468,6 @@ local function farmSingleMob(mobData, offset, maxWait)
                 waitForCharacter()
             end
         end
-
         local currentHp = getMobHP(mob)
         if currentHp then
             safeSet("mobStatus", string.format("%s | HP:%d | %s", mobName, currentHp, mobZone))
@@ -505,7 +476,6 @@ local function farmSingleMob(mobData, offset, maxWait)
         end
         task.wait(MOB_HP_CHECK_INTERVAL)
     end
-
     if not isMobAlive(mob) then
         mobsKilled = mobsKilled + 1
         safeSet("mobKills", tostring(mobsKilled))
@@ -518,45 +488,37 @@ local function farmSummerBoss()
     local boss = findSummerBoss()
     if not boss then return false end
     if not getPlayerRoot() then waitForCharacter() end
-
     safeSet("status", "🔒 BOSS PRIORITY | TP to Event...")
     safeSet("mobStatus", "Teleporting to Summer Event...")
     safeTeleport(SUMMER_TP_PAD, 3, true)
     task.wait(BOSS_WAIT_AFTER_TP)
-
     safeSet("mobStatus", "Teleporting to Boss...")
     safeTeleport(BOSS_TP_PAD, 3, true)
     task.wait(1.5)
-
     boss = findSummerBoss()
     if not boss then
         safeSet("mobStatus", "Summer Boss lost after TP")
         return false
     end
-
     local bossRoot = boss:FindFirstChild("HumanoidRootPart")
     if not bossRoot then return false end
-
     local bossData = extractMobData(boss, "SummerEvent")
     if bossData then
         safeSet("zoneDisplay", "SUMMER BOSS (PRIORITY)")
         safeSet("status", "⚔️ KILLING BOSS ⚔️")
         safeTeleport(bossRoot.Position, BOSS_FARM_OFFSET, true)
         task.wait(0.5)
-        
         local startTime = tick()
         while IS_RUNNING and isMobAlive(boss) do
             if tick() - startTime > BOSS_MAX_WAIT_TIME then break end
             local currentHp = getMobHP(boss)
             if currentHp then safeSet("mobStatus", string.format("BOSS HP: %d", currentHp)) end
-            
             local myPos = getPlayerPos()
             if myPos and (bossRoot.Position - myPos).Magnitude > 15 then
                 safeTeleport(bossRoot.Position, BOSS_FARM_OFFSET, true)
             end
             task.wait(0.2)
         end
-        
         if not isMobAlive(boss) then
             safeSet("status", "✅ BOSS KILLED!")
             safeSet("mobStatus", "Waiting for respawn...")
@@ -582,10 +544,8 @@ local function transitionToNextZone(fromZone)
     local nextIdx = currentZoneIndex + 1
     if nextIdx > #MOB_ZONES then nextIdx = 1 end
     local nextZone = MOB_ZONES[nextIdx]
-
     safeSet("status", fromZone.name .. " cleared! Switching to " .. nextZone.name)
     safeSet("mobStatus", "Moving to " .. nextZone.name)
-
     if fromZone.exitPad then
         safeTeleport(fromZone.exitPad, 3, true)
         task.wait(2.0)
@@ -593,7 +553,6 @@ local function transitionToNextZone(fromZone)
     if not getPlayerRoot() then waitForCharacter() end
     safeTeleport(nextZone.farmPos, 3, true)
     task.wait(ZONE_SWITCH_DELAY)
-
     currentZoneIndex = nextIdx
     safeSet("zoneDisplay", nextZone.name)
 end
@@ -601,14 +560,12 @@ end
 local function mobFarmingLoop()
     while IS_RUNNING do
         if not getPlayerRoot() then waitForCharacter() end
-        
         if FARM_MODE ~= "mobs_only" and isBossAlive() then
             farmSummerBoss()
             task.wait(1.0)
         else
             local zone = MOB_ZONES[currentZoneIndex]
             local mobs = findMobsInZone(zone)
-
             if #mobs > 0 then
                 while IS_RUNNING and #mobs > 0 do
                     if FARM_MODE ~= "mobs_only" and isBossAlive() then break end
@@ -644,7 +601,6 @@ local function findAllSeashells()
     local results = {}
     local container = findObject(SEARCH_PATH)
     if not container then shellCache = results; shellCacheTime = now; return results end
-    
     for _, obj in ipairs(container:GetDescendants()) do
         if obj:IsA("BasePart") and obj.Name:find("Seashell") and checkSize(obj) then
             local pos = obj.Position
@@ -663,13 +619,11 @@ local function isValidShell(data) return data and data.obj and data.obj.Parent ~
 local function farmSeashellsOnce()
     local shells = findAllSeashells()
     if #shells == 0 then return 0 end
-
     local pPos = getPlayerPos()
     if pPos then
         for i = 1, #shells do shells[i].dist = (shells[i].pos - pPos).Magnitude end
         table.sort(shells, function(a, b) return a.dist < b.dist end)
     end
-
     local collected = 0
     for i = 1, #shells do
         if not IS_RUNNING then return collected end
@@ -775,7 +729,7 @@ UI.AddTab("Fire Farm", function(tab)
     main:Button("Mobs + Boss (Auto-Boss)", function() FARM_MODE = "mobs"; safeSet("status", "Mode: Mobs + Boss") end)
     main:Button("Shells Only", function() FARM_MODE = "seashells"; safeSet("status", "Mode: Shells") end)
 
-    local tpSection = tab:Section("Teleports (Blocked if Boss Alive)", "Right")
+    local tpSection = tab:Section("Teleports", "Right")
     tpSection:Text("=== SHOP ===")
     tpSection:Button("Sell", function() safeTeleport(TP_POS.Sell, 2.5) end)
     tpSection:Button("Buy", function() safeTeleport(TP_POS.Buy, 2.5) end)
@@ -790,69 +744,12 @@ UI.AddTab("Fire Farm", function(tab)
     tpSection:Button("Summer Boss Pad", function() safeTeleport(BOSS_TP_PAD, 3) end)
 end)
 
-UI.AddTab("Hitbox Expander", function(tab)
-    if not tab then return end
-    local main = tab:Section("Control", "Left")
-    main:Text("=== HITBOX EXPANDER ===")
-    main:Text("Target: SummerEvent26 Boss")
-    main:Text("")
-    main:Text("=== STATUS ===")
-    main:InputText("hbStatus", "", "OFF")
-    main:InputText("hbCount", "Parts:", "0")
-    main:Text("")
-    main:Button("Toggle ON / OFF", function()
-        HB_ENABLED = not HB_ENABLED
-        if HB_ENABLED then
-            safeSet("hbStatus", "ON")
-            refreshHitboxes()
-        else
-            safeSet("hbStatus", "OFF")
-            restoreAllHitboxes()
-            safeSet("hbCount", "0")
-        end
-    end)
-    main:Text("")
-    main:Text("=== SIZE ===")
-    main:InputText("hbMult", "Multiplier:", tostring(HITBOX_MULT))
-    main:Button("Apply Size", function()
-        local val = tonumber(UI.GetValue("hbMult"))
-        if val and val > 0 then
-            HITBOX_MULT = val
-            restoreAllHitboxes()
-            if HB_ENABLED then task.wait(0.1); refreshHitboxes() end
-            safeSet("hbStatus", "ON | x" .. val)
-        end
-    end)
-    main:Text("")
-    main:Text("=== TARGET PART ===")
-    main:Button("Target: Torso", function() TARGET_PART = "Torso"; safeSet("hbTarget", "Torso"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-    main:Button("Target: HumanoidRootPart", function() TARGET_PART = "HumanoidRootPart"; safeSet("hbTarget", "HumanoidRootPart"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-    main:Button("Target: All", function() TARGET_PART = "All"; safeSet("hbTarget", "All"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-    main:Button("Target: Head", function() TARGET_PART = "Head"; safeSet("hbTarget", "Head"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-    main:Button("Target: Arms", function() TARGET_PART = "Arms"; safeSet("hbTarget", "Arms"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-    main:Button("Target: Legs", function() TARGET_PART = "Legs"; safeSet("hbTarget", "Legs"); if HB_ENABLED then restoreAllHitboxes(); task.wait(0.1); refreshHitboxes() end end)
-end)
-
 safeSet("status", "Waiting")
 safeSet("mobStatus", "-")
 safeSet("mobKills", "0")
 safeSet("shellCount", "0")
 safeSet("zoneDisplay", MOB_ZONES[1].name)
 safeSet("bossInfo", "Loading...")
-safeSet("hbStatus", "OFF")
-safeSet("hbCount", "0")
-safeSet("hbMult", tostring(HITBOX_MULT))
-safeSet("hbTarget", TARGET_PART)
-safeSet("hbTransp", tostring(PART_TRANSPARENCY))
-
-task.spawn(function()
-    task.wait(0.5)
-    if HB_ENABLED then
-        refreshHitboxes()
-        safeSet("hbStatus", "Expanded | " .. TARGET_PART .. " x" .. HITBOX_MULT)
-    end
-end)
 
 task.spawn(startFarming)
-
-print("by useraymi")
+print("by useraymi | H.E. Built-in (HRP x" .. HB_MULT .. ")")
