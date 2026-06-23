@@ -62,7 +62,8 @@ local TP_POS = {
 
 -- State
 local IS_RUNNING = false
-local FARM_MODE = "mobs"
+-- ИЗМЕНЕНО: Добавлен режим "mobs_only" по умолчанию
+local FARM_MODE = "mobs_only"
 local currentZoneIndex = 1
 local mobsKilled = 0
 local seashellsCollected = 0
@@ -167,8 +168,9 @@ end
 
 local function isBossAlive() return findSummerBoss() ~= nil end
 
+-- ИЗМЕНЕНО: В режиме "mobs_only" телепорты не блокируются боссом
 local function safeTeleport(pos, offset, forceAllow)
-    if not forceAllow and isBossAlive() then
+    if FARM_MODE ~= "mobs_only" and not forceAllow and isBossAlive() then
         safeSet("status", "⚠️ TP BLOCKED!")
         safeSet("mobStatus", "Boss is alive! Kill him first.")
         return false
@@ -225,7 +227,7 @@ task.spawn(function()
     end
 end)
 
--- Hitbox Expander
+-- Hitbox Expander (Только для Ивентового Босса)
 local TORSO_NAMES = {"Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart", "Chest", "Body"}
 local ARM_NAMES = {"Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "Arm"}
 local LEG_NAMES = {"Left Leg", "Right Leg", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "Leg"}
@@ -443,6 +445,7 @@ local function findMobsInZone(zone)
     return results
 end
 
+-- ИЗМЕНЕНО: В режиме "mobs_only" босс не прерывает фарм моба
 local function farmSingleMob(mobData, offset, maxWait)
     local mob = mobData.model
     local mobName = mobData.name
@@ -458,7 +461,7 @@ local function farmSingleMob(mobData, offset, maxWait)
     task.wait(0.5)
 
     while IS_RUNNING and isMobAlive(mob) do
-        if isBossAlive() then
+        if FARM_MODE ~= "mobs_only" and isBossAlive() then
             safeSet("status", "⚠️ Boss Spawned! Interrupting...")
             break
         end
@@ -588,11 +591,12 @@ local function transitionToNextZone(fromZone)
     safeSet("zoneDisplay", nextZone.name)
 end
 
+-- ИЗМЕНЕНО: В режиме "mobs_only" цикл игнорирует босса
 local function mobFarmingLoop()
     while IS_RUNNING do
         if not getPlayerRoot() then waitForCharacter() end
         
-        if isBossAlive() then
+        if FARM_MODE ~= "mobs_only" and isBossAlive() then
             farmSummerBoss()
             task.wait(1.0)
         else
@@ -601,7 +605,7 @@ local function mobFarmingLoop()
 
             if #mobs > 0 then
                 while IS_RUNNING and #mobs > 0 do
-                    if isBossAlive() then break end
+                    if FARM_MODE ~= "mobs_only" and isBossAlive() then break end
                     farmSingleMob(mobs[1], MOB_TELEPORT_OFFSET, MOB_MAX_WAIT_TIME)
                     if not IS_RUNNING then break end
                     mobs = findMobsInZone(zone)
@@ -609,7 +613,7 @@ local function mobFarmingLoop()
             else
                 safeSet("status", "No mobs in " .. zone.name)
                 safeSet("mobStatus", "Checking next zone...")
-                if isBossAlive() then
+                if FARM_MODE ~= "mobs_only" and isBossAlive() then
                     farmSummerBoss()
                 else
                     transitionToNextZone(zone)
@@ -715,11 +719,12 @@ local function shellFarmingLoop()
     end
 end
 
+-- ИЗМЕНЕНО: Добавлен запуск для "mobs_only"
 function startFarming()
     if IS_RUNNING then return end
     IS_RUNNING = true
     safeSet("status", "Running")
-    if FARM_MODE == "mobs" then
+    if FARM_MODE == "mobs" or FARM_MODE == "mobs_only" then
         task.spawn(function()
             if not getPlayerRoot() then waitForCharacter() end
             local zone = MOB_ZONES[currentZoneIndex]
@@ -761,7 +766,9 @@ UI.AddTab("Fire Farm", function(tab)
     main:Button("Start / Stop", function() if IS_RUNNING then stopFarming() else startFarming() end end)
     main:Text("")
     main:Text("=== MODE ===")
-    main:Button("Mobs + Boss (Cycle)", function() FARM_MODE = "mobs"; safeSet("status", "Mode: Mobs + Boss") end)
+    -- ИЗМЕНЕНО: Добавлена кнопка Mobs Only и переименована старая
+    main:Button("Mobs Only (Ignore Boss)", function() FARM_MODE = "mobs_only"; safeSet("status", "Mode: Mobs Only") end)
+    main:Button("Mobs + Boss (Auto-Boss)", function() FARM_MODE = "mobs"; safeSet("status", "Mode: Mobs + Boss") end)
     main:Button("Shells Only", function() FARM_MODE = "seashells"; safeSet("status", "Mode: Shells") end)
 
     local tpSection = tab:Section("Teleports (Blocked if Boss Alive)", "Right")
@@ -843,7 +850,7 @@ task.spawn(function()
     end
 end)
 
--- Автоматический запуск фарма (режим Mobs+Boss)
+-- Автоматический запуск фарма (режим Mobs Only по умолчанию)
 task.spawn(startFarming)
 
-print("by useraymi (default ON x15, auto-farm)")
+print("by useraymi (default ON x15, auto-farm mobs_only)")
