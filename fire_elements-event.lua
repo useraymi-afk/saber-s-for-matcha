@@ -1,5 +1,5 @@
 -- Fire Elements Farm + Hitbox Expander (event boss) for Matcha
--- by useraymi (default ON x15, auto-farm)
+-- by useraymi (default ON H.E x15 + auto-farm mobs only)
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
