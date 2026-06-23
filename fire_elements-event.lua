@@ -853,4 +853,4 @@ end)
 -- Автоматический запуск фарма (режим Mobs Only по умолчанию)
 task.spawn(startFarming)
 
-print("by useraymi (default ON x15, auto-farm mobs_only)")
+print("by useraymi")
