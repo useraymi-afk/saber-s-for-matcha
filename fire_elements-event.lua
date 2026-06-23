@@ -1,5 +1,5 @@
 -- Fire Elements Farm + Hitbox Expander (event boss) for Matcha
--- by useraymi
+-- by useraymi (default ON x15, auto-farm)
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -69,7 +69,8 @@ local seashellsCollected = 0
 local shellCache = nil
 local shellCacheTime = 0
 
-local HITBOX_MULT = 3.0
+-- Хитбокс включён по умолчанию, множитель 15
+local HITBOX_MULT = 15.0
 local TARGET_PART = "Torso"
 local PART_TRANSPARENCY = 0.7
 local SHOW_HIGHLIGHT = true
@@ -77,7 +78,7 @@ local originalSizes = {}
 local expandedParts = {}
 local expandedMobs = {}
 local highlights = {}
-local HB_ENABLED = false
+local HB_ENABLED = true
 
 local bossDeathTime = nil
 local bossRespawnTime = 180
@@ -833,4 +834,16 @@ safeSet("hbMult", tostring(HITBOX_MULT))
 safeSet("hbTarget", TARGET_PART)
 safeSet("hbTransp", tostring(PART_TRANSPARENCY))
 
-print("by useraymi")
+-- Автоматическое включение хитбокса
+task.spawn(function()
+    task.wait(0.5)
+    if HB_ENABLED then
+        refreshHitboxes()
+        safeSet("hbStatus", "Expanded | " .. TARGET_PART .. " x" .. HITBOX_MULT)
+    end
+end)
+
+-- Автоматический запуск фарма (режим Mobs+Boss)
+task.spawn(startFarming)
+
+print("by useraymi (default ON x15, auto-farm)")
