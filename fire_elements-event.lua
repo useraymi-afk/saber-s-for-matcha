@@ -44,7 +44,19 @@ local MOB_ZONES = {
             "Workspace.Gameplay.RegionsLoaded.AdvancedFireArea.Important.Fire.Fire Boss",
         },
         farmPos = Vector3.new(-110.74, 35.95, 681.57),
-        exitPad = nil,
+        exitPad = Vector3.new(-117.51, 40.17, 762.62), -- Пад в Мастер Зону
+    },
+    {
+        name = "MasterFireArea",
+        searchPaths = {
+            "Workspace.Gameplay.RegionsLoaded.MasterFireArea.Important.Fire",
+        },
+        directPaths = {
+            "Workspace.Gameplay.RegionsLoaded.MasterFireArea.Important.Fire.Fire Golem",
+            "Workspace.Gameplay.RegionsLoaded.MasterFireArea.Important.Fire.Master Fire Boss",
+        },
+        farmPos = Vector3.new(-757.39, 90.88, 708.44), -- Центр мастер зоны
+        exitPad = nil, -- Выхода нет
     },
 }
 
@@ -62,7 +74,6 @@ local TP_POS = {
 
 -- State
 local IS_RUNNING = false
--- ИЗМЕНЕНО: Добавлен режим "mobs_only" по умолчанию
 local FARM_MODE = "mobs_only"
 local currentZoneIndex = 1
 local mobsKilled = 0
@@ -70,7 +81,6 @@ local seashellsCollected = 0
 local shellCache = nil
 local shellCacheTime = 0
 
--- Хитбокс включён по умолчанию, множитель 15
 local HITBOX_MULT = 15.0
 local TARGET_PART = "Torso"
 local PART_TRANSPARENCY = 0.7
@@ -168,7 +178,6 @@ end
 
 local function isBossAlive() return findSummerBoss() ~= nil end
 
--- ИЗМЕНЕНО: В режиме "mobs_only" телепорты не блокируются боссом
 local function safeTeleport(pos, offset, forceAllow)
     if FARM_MODE ~= "mobs_only" and not forceAllow and isBossAlive() then
         safeSet("status", "⚠️ TP BLOCKED!")
@@ -227,7 +236,7 @@ task.spawn(function()
     end
 end)
 
--- Hitbox Expander (Только для Ивентового Босса)
+-- Hitbox Expander
 local TORSO_NAMES = {"Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart", "Chest", "Body"}
 local ARM_NAMES = {"Left Arm", "Right Arm", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand", "Arm"}
 local LEG_NAMES = {"Left Leg", "Right Leg", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot", "Leg"}
@@ -445,7 +454,6 @@ local function findMobsInZone(zone)
     return results
 end
 
--- ИЗМЕНЕНО: В режиме "mobs_only" босс не прерывает фарм моба
 local function farmSingleMob(mobData, offset, maxWait)
     local mob = mobData.model
     local mobName = mobData.name
@@ -559,7 +567,6 @@ local function farmSummerBoss()
     return false
 end
 
--- Auto Boss Checker
 task.spawn(function()
     while true do
         task.wait(30)
@@ -591,7 +598,6 @@ local function transitionToNextZone(fromZone)
     safeSet("zoneDisplay", nextZone.name)
 end
 
--- ИЗМЕНЕНО: В режиме "mobs_only" цикл игнорирует босса
 local function mobFarmingLoop()
     while IS_RUNNING do
         if not getPlayerRoot() then waitForCharacter() end
@@ -719,7 +725,6 @@ local function shellFarmingLoop()
     end
 end
 
--- ИЗМЕНЕНО: Добавлен запуск для "mobs_only"
 function startFarming()
     if IS_RUNNING then return end
     IS_RUNNING = true
@@ -766,7 +771,6 @@ UI.AddTab("Fire Farm", function(tab)
     main:Button("Start / Stop", function() if IS_RUNNING then stopFarming() else startFarming() end end)
     main:Text("")
     main:Text("=== MODE ===")
-    -- ИЗМЕНЕНО: Добавлена кнопка Mobs Only и переименована старая
     main:Button("Mobs Only (Ignore Boss)", function() FARM_MODE = "mobs_only"; safeSet("status", "Mode: Mobs Only") end)
     main:Button("Mobs + Boss (Auto-Boss)", function() FARM_MODE = "mobs"; safeSet("status", "Mode: Mobs + Boss") end)
     main:Button("Shells Only", function() FARM_MODE = "seashells"; safeSet("status", "Mode: Shells") end)
@@ -779,7 +783,7 @@ UI.AddTab("Fire Farm", function(tab)
     tpSection:Text("=== FIRE ZONES ===")
     tpSection:Button("ElementZones", function() safeTeleport(MOB_ZONES[1].farmPos, 3) end)
     tpSection:Button("TP Pad (Elem->Adv)", function() safeTeleport(MOB_ZONES[1].exitPad, 3) end)
-    tpSection:Button("AdvancedFire", function() safeTeleport(MOB_ZONES[2].farmPos, 3) end)
+    tpSection:Button("MasterFire TP Pad", function() safeTeleport(MOB_ZONES[2].exitPad, 3) end)
     tpSection:Text("")
     tpSection:Text("=== SUMMER EVENT ===")
     tpSection:Button("Summer Event Pin", function() safeTeleport(SUMMER_TP_PAD, 3) end)
@@ -841,7 +845,6 @@ safeSet("hbMult", tostring(HITBOX_MULT))
 safeSet("hbTarget", TARGET_PART)
 safeSet("hbTransp", tostring(PART_TRANSPARENCY))
 
--- Автоматическое включение хитбокса
 task.spawn(function()
     task.wait(0.5)
     if HB_ENABLED then
@@ -850,7 +853,6 @@ task.spawn(function()
     end
 end)
 
--- Автоматический запуск фарма (режим Mobs Only по умолчанию)
 task.spawn(startFarming)
 
 print("by useraymi")
