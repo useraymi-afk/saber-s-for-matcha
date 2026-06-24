@@ -5,6 +5,14 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
+-- [ANTI-AFK]
+local VirtualUser = game:GetService("VirtualUser")
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+    print("Anti-AFK: Simulated input to prevent disconnect.")
+end)
+
 -- Config
 local SEARCH_PATH = "Workspace.Gameplay.RegionsLoaded.SummerEvent26.CurrencyPickup.CurrencyHolder"
 local TARGET_SIZE = Vector3.new(4.04, 3.6, 1.98)
@@ -752,4 +760,4 @@ safeSet("zoneDisplay", MOB_ZONES[1].name)
 safeSet("bossInfo", "Loading...")
 
 task.spawn(startFarming)
-print("by useraymi | H.E. Built-in (HRP x" .. HB_MULT .. ")")
+print("by useraymi | H.E. Built-in (HRP x" .. HB_MULT .. ") | Anti-AFK Enabled")
