@@ -1,7 +1,6 @@
 --====================================================================--
---   FIRE FARM V5.6 — POST-BOSS TELEPORT TO ELEMENT ZONES            --
---   by useraymi — after killing summer boss, go to (829,100,1222)  --
---   then to ElementZones and resume farming                        --
+--   FIRE FARM V5.9 — FIXED NIL CONCATENATION ERROR                  --
+--   by useraymi — защита от nil в названиях зон                     --
 --====================================================================--
 
 loadstring(game:HttpGet("https://scripts.wabisabi.mom/wabi-sabi-ui-lib.lua"))()
@@ -15,11 +14,11 @@ local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 while not LocalPlayer do task.wait(0.1) LocalPlayer = Players.LocalPlayer end
 
--- ===== НАСТРОЙКИ (по умолчанию — дневной) =====
+-- ===== НАСТРОЙКИ =====
 local BOSS_HOLDER_PATH = "ReplicatedStorage.HiddenRegions.SummerEvent26.Boss.BossHolder"
 local SUMMER_TP_PAD = Vector3.new(609.14, 208.54, 74.28)
 local BOSS_TP_PAD = Vector3.new(1030.07, 89.31, 1530.62)
-local POST_BOSS_TELEPORT = Vector3.new(829.05, 100.03, 1222.91)  -- новые координаты
+local POST_BOSS_TELEPORT = Vector3.new(829.05, 100.03, 1222.91)
 local HB_MULT = 15.0
 
 local MOB_ZONES = {
@@ -32,6 +31,7 @@ local MOB_ZONES = {
         },
         farmPos = Vector3.new(547.62, 189.75, 463.46),
         exitPad = Vector3.new(500.59, 205.12, 474.27),
+        backwardPad = nil,
     },
     {
         name = "AdvancedFireArea",
@@ -45,6 +45,7 @@ local MOB_ZONES = {
         },
         farmPos = Vector3.new(-110.74, 35.95, 681.57),
         exitPad = Vector3.new(-117.51, 40.17, 762.62),
+        backwardPad = Vector3.new(106.21, 30.13, 679.55),
     },
     {
         name = "MasterFireArea",
@@ -57,10 +58,10 @@ local MOB_ZONES = {
         },
         farmPos = Vector3.new(-757.39, 90.88, 708.44),
         exitPad = nil,
+        backwardPad = Vector3.new(-639.72, 97.43, 709.74),
     },
 }
 
--- Параметры
 local MOB_PRIORITY = {"Fire Boss", "Fire Golem"}
 local MOB_TELEPORT_OFFSET = 4.0
 local MOB_HP_CHECK_INTERVAL = 0.3
@@ -97,7 +98,6 @@ local pathCache = {}
 
 local bossAlive = false
 
--- ===== GUI ЭЛЕМЕНТЫ =====
 local statusParagraph = nil
 local mobKillsParagraph = nil
 local bossKillsParagraph = nil
@@ -106,7 +106,6 @@ local zoneDropdown = nil
 
 local sliders = {}
 
--- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 local function findObject(path)
     if pathCache[path] and pathCache[path].Parent then return pathCache[path] end
     pathCache[path] = nil
@@ -248,7 +247,6 @@ local function restoreAllHitboxes(origTbl, expTbl, hlTbl)
     table.clear(hlTbl)
 end
 
--- Циклы хитбоксов
 local function hitboxLoopSummer()
     while true do
         task.wait(MOB_HP_CHECK_INTERVAL * 3)
@@ -386,7 +384,6 @@ local function findMobsInZone(zone)
     return results
 end
 
--- ===== ФАРМ МОБА =====
 local function farmSingleMob(mobData, offset, maxWait)
     local mob = mobData.model
     if not isMobAlive(mob) then return false end 
@@ -440,7 +437,7 @@ local function farmSingleMob(mobData, offset, maxWait)
     return false
 end
 
--- ===== ФАРМ БОССА (С ДОБАВЛЕННЫМИ ТЕЛЕПОРТАМИ ПОСЛЕ УБИЙСТВА) =====
+-- ===== ФАРМ БОССА (с защитой от nil) =====
 local function farmSummerBoss()
     local boss = findSummerBoss()
     if not boss then return false end
@@ -465,23 +462,22 @@ local function farmSummerBoss()
         task.wait(0.8)
     end
     if not isMobAlive(boss) then
-        -- === НОВЫЙ КОД: телепорты после убийства босса ===
         print("[Boss] Босс убит! Телепорт на промежуточные координаты...")
-        -- 1. Телепорт на POST_BOSS_TELEPORT (829, 100, 1222)
         safeTeleport(POST_BOSS_TELEPORT, 0, true)
         task.wait(0.5)
-        -- 2. Телепорт на ElementZones (первая зона)
         local firstZone = MOB_ZONES[1]
         if firstZone then
             safeTeleport(firstZone.farmPos, 3, true)
-            task.wait(0.5)
+            task.wait(1.5)
         end
-        -- 3. Сбрасываем индекс зоны на первую
         currentZoneIndex = 1
         if zoneDropdown then
-            zoneDropdown:SetValue(1)
+            pcall(function() zoneDropdown:SetValue(1) end)
         end
-        print("[Boss] Телепорт завершён, начинаем фарм мобов.")
+        mobCache = nil
+        mobCacheTime = 0
+        mobCacheZone = nil
+        print("[Boss] Телепорт завершён, кэш сброшен, начинаем фарм мобов.")
         return true
     end
     return false
@@ -501,7 +497,29 @@ end)
 -- ===== ПЕРЕКЛЮЧЕНИЕ ЗОН =====
 local function transitionToNextZone(fromZone)
     local nextIdx = currentZoneIndex + 1
-    if nextIdx > #MOB_ZONES then nextIdx = 1 end
+    if nextIdx > #MOB_ZONES then
+        local zone3 = MOB_ZONES[3]
+        if zone3 and zone3.backwardPad then
+            safeTeleport(zone3.backwardPad, 3, true)
+            task.wait(ZONE_SWITCH_DELAY)
+        end
+        local zone2 = MOB_ZONES[2]
+        if zone2 and zone2.backwardPad then
+            safeTeleport(zone2.backwardPad, 3, true)
+            task.wait(ZONE_SWITCH_DELAY)
+        end
+        local zone1 = MOB_ZONES[1]
+        if zone1 then
+            safeTeleport(zone1.farmPos, 3, true)
+            task.wait(ZONE_SWITCH_DELAY)
+        end
+        currentZoneIndex = 1
+        if zoneDropdown then
+            pcall(function() zoneDropdown:SetValue(1) end)
+        end
+        return
+    end
+
     local nextZone = MOB_ZONES[nextIdx]
     if fromZone.exitPad then
         safeTeleport(fromZone.exitPad, 3, true)
@@ -512,7 +530,7 @@ local function transitionToNextZone(fromZone)
     task.wait(ZONE_SWITCH_DELAY)
     currentZoneIndex = nextIdx
     if zoneDropdown then
-        zoneDropdown:SetValue(currentZoneIndex)
+        pcall(function() zoneDropdown:SetValue(currentZoneIndex) end)
     end
 end
 
@@ -531,7 +549,7 @@ task.spawn(function()
                     if #mobs > 0 then
                         farmSingleMob(mobs[1], MOB_TELEPORT_OFFSET, MOB_MAX_WAIT_TIME)
                     else
-                        task.wait(1.0) 
+                        task.wait(2.0)
                         mobs = findMobsInZone(zone)
                         
                         if #mobs > 0 then
@@ -569,7 +587,7 @@ end)
 -- ===== GUI =====
 local Window = Library:CreateWindow({
     Title = "Fire Farm ⚔️",
-    SubTitle = "V5.6 • Post-Boss Teleport",
+    SubTitle = "V5.9 • No Nil Errors",
     Size = Vector2.new(650, 620),
     Resize = true,
 })
@@ -620,6 +638,7 @@ MainTab:AddButton({
 
 local zoneNames = {}
 for i, z in ipairs(MOB_ZONES) do zoneNames[i] = z.name end
+
 MainTab:AddDropdown({
     Id = "zone_select",
     Title = "Зона фарма",
@@ -628,7 +647,8 @@ MainTab:AddDropdown({
     Default = 1,
     Callback = function(value)
         currentZoneIndex = value
-        if statusParagraph then statusParagraph:SetContent("Зона: " .. zoneNames[value]) end
+        local zoneName = zoneNames[value] or "Неизвестно"
+        if statusParagraph then statusParagraph:SetContent("Зона: " .. zoneName) end
     end
 })
 zoneDropdown = Library.Options.zone_select
@@ -641,7 +661,6 @@ MainTab:AddButton({
     end
 })
 
--- ВКЛАДКА "ТЕЛЕПОРТЫ"
 local TeleportsTab = Window:AddTab({ Title = "Телепорты", Icon = "map" })
 TeleportsTab:AddParagraph({ Title = "Огненные зоны", Content = "" })
 for i, zone in ipairs(MOB_ZONES) do
@@ -652,14 +671,23 @@ for i, zone in ipairs(MOB_ZONES) do
         end
     })
 end
-TeleportsTab:AddParagraph({ Title = "Переходы между зонами", Content = "" })
+TeleportsTab:AddParagraph({ Title = "Переходы между зонами (прямые)", Content = "" })
 TeleportsTab:AddButton({
-    Title = "TP Pad (Elem->Adv)",
+    Title = "Element -> Advanced (exitPad)",
     Callback = function() safeTeleport(MOB_ZONES[1].exitPad, 3, true) end
 })
 TeleportsTab:AddButton({
-    Title = "MasterFire TP Pad",
+    Title = "Advanced -> Master (exitPad)",
     Callback = function() safeTeleport(MOB_ZONES[2].exitPad, 3, true) end
+})
+TeleportsTab:AddParagraph({ Title = "Переходы между зонами (обратные)", Content = "" })
+TeleportsTab:AddButton({
+    Title = "Advanced -> Element (backwardPad)",
+    Callback = function() safeTeleport(MOB_ZONES[2].backwardPad, 3, true) end
+})
+TeleportsTab:AddButton({
+    Title = "Master -> Advanced (backwardPad)",
+    Callback = function() safeTeleport(MOB_ZONES[3].backwardPad, 3, true) end
 })
 TeleportsTab:AddParagraph({ Title = "Summer Event", Content = "" })
 TeleportsTab:AddButton({
@@ -671,7 +699,6 @@ TeleportsTab:AddButton({
     Callback = function() safeTeleport(BOSS_TP_PAD, 3, true) end
 })
 
--- ВКЛАДКА "НАСТРОЙКИ"
 local SettingsTab = Window:AddTab({ Title = "Настройки", Icon = "sliders-horizontal" })
 
 local profileSection = SettingsTab:AddSection("Быстрые профили")
@@ -758,8 +785,8 @@ MainTab:AddButton({
     Title = "ℹ️ О скрипте",
     Callback = function()
         Library:Notify({
-            Title = "Fire Farm V5.6",
-            Content = "После убийства босса — телепорт на (829,100,1222), затем ElementZones.",
+            Title = "Fire Farm V5.9",
+            Content = "Исправлена ошибка nil в названиях зон.",
             Duration = 4,
         })
     end
@@ -767,6 +794,6 @@ MainTab:AddButton({
 
 Library:Notify({
     Title = "✅ Загружено",
-    Content = "Fire Farm V5.6 — с пост-босс телепортом.",
+    Content = "Fire Farm V5.9 — ошибка конкатенации устранена.",
     Duration = 3,
 })
